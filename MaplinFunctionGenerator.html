@@ -1,0 +1,254 @@
+Hacking The Maplin Function Generator
+=====================================
+
+The Maplin Function Generator is supplied in kit form, consisting of
+an AtTiny2313 microcontroller, an 8-bit D/A converter formed from the
+microcontroller's PORTB outputs and an R/2R ladder, and two buffering
+amplifiers for the output.
+
+The kit can generate sine, square, triangle and sawtooth waveforms, with
+a maximum frequency of approximately 50kHz. It might actually go higher than
+this, but once I took a look at the quality of the signal it generated, I
+determined straight away that it needed some serious attention. So out 
+came the Arduino.
+
+What I found was essentially three issues:
+
+1. The generated frequency was not stable. It seemed to ramp up in discrete
+increments over the course of three or four seconds.
+
+2. The generated signal was not continuous - there was a pause in the signal
+every few milliseconds.
+
+3. The quality of the signal was poor - there were large steps in the output.
+
+The first issue was clearly a bug in the code. The second indicated the presence
+of an interrupt handler polling the buttons used to set the mode and frequency, 
+and the last issue was due to insufficient precision in the stored COS table
+used to generate the sine wave.
+
+With the modifications I describe here, the hacked generator now has the following
+specifications:
+
+ - Waveforms generated to full 8-bit precision up to 50kHz
+ - Selectable output filtering, giving cleaner signals
+ - Two-speed frequency increase/decrease, with LED indication of the speed
+   of change and max/min limits
+   
+Of course, everything comes at a price. In this case you lose a feature:
+
+  - No signal is generated while the frequency is being changed
+  
+You also need to add 2 diodes and, optionally, one capacitor.
+
+I'm now going to discuss the maths behind digital direct synthesis (DDS), before
+describing the modifications. If you don't care and just want to know how to get
+the shiny new features (and how to send me a cheque..) you can skip ahead now.
+
+Discussion Of DDS Synthesis
+----------------------------
+
+There are essentially two ways a digital circuit can synthesise a signal:
+
+  - Calculate the correct value of the signal at every instant 
+  - Use a lookup table
+  
+There are also interesting combinations of the two, but since anything involving
+calculation either involves custom hardware (not an option) or is really slow, our
+choice is to use the lookup table method.
+
+Imagine a sine wave of amplitude A. If you calculate its value at
+equal intervals over an entire period (360 degress or 2pi radians), and there are N
+intervals, you will have constructed a lookup table.
+
+Now to generate a sine wave, you simply take a value from the table and send it to your 
+DAC to convert to a voltage level. Then you wait for a short time t before taking the 
+next value from the table and sending that to the DAC. It's easy to see that if you do
+this (looping back to the first entry in the table when you get to the end) you
+generate  a signal at the output which is a sine wave with frequency f = 1/Nt.
+
+What does this signal look like in terms of fidelity? There are two parts to this:
+first, the resolution of the DAC controls the number of steps in the output - the more
+accurate the DAC, the cleaner the output; second the resolution of the wave table in terms
+of how many entries there are determines both the effective resolution of the output signal
+in amplitude, but also how accurately in time the changes from step to step occur.
+
+The kit implements an 8-bit DAC using precision resistors in an R/2R ladder, so that is
+something we can't improve.
+
+Let's look in more detail at the errors due to the size (number of samples) of the 
+wave table and the the times at which the wave table is sampled.
+
+At first sight, we might say that since we have an N-bit DAC then we need a wave-table
+with N bits of address - or 2^N samples. For dramatic effect, here's a picture of a sine
+wave table with 4-bits of resolution and 16 samples:
+
+     --- diagram ----
+     
+And here's the actual table of values:
+
+     --- table of values ----
+     
+You can clearly see that at the zero-crossings the wave-table is horribly inaccurate - the
+values jump from 0 to 3 in one step, effectively losing two bits of resolution at the crossing.
+Let's put more samples into the table - make it 32 samples (5-bit address):
+
+    -- 5-bit table  ----
+    
+We're still missing some steps at the crossing. Finally here's a 64 sample table (6-bit
+address)
+
+   -- 6-bit table ---
+   
+Finally, we're using the full precision of our 4-bit DAC. You can repeat this exercise
+for any number (N) of bits of resolution and you'll find that in order to use them all, you 
+need a table with 2^N+2 entries. So for our purposes we need a table with 2^10 or 1024
+entries.
+
+We're not finished yet though. Because of the repetitive nature of a sine wave, we don't
+actually need to store one complete cycle. We could store only a half or even a quarter
+and use that to generate the 'missing' values. In this case I've opted for a table with
+512 entries as a good tradeoff between table size and code size (you need to do more
+work in the code to use a 1/4 size table, hence you generate lower frequencies than for
+a 1/2 size table).
+
+Now let's look at the accuracy in time of when we send our samples to the DAC. First we
+need to go into a bit more detail on how we generate our address into the sample table.
+
+Remember how we said that if we send each succeeding sample from the table to the DAC
+every t seconds, we would generate a signal with frequency f = 1/Nt? This means that in
+order to generate different frequencies we need to be able to change the value of t.
+One way of doing that would be to have code which looks like this:
+
+unsigned int addr = 0;
+unsigned int delay = xxx;
+
+while(true) {
+  writeToDac(readFromTableAtPosition(addr));           // 2 cycles
+  addr = addr + 1;                                     // 1 cycle
+  // wait for the delay time to control the frequency
+  for(int i=0; i<delay; i++) {                         // 2 cycles
+    // do nothing                                      // 1 cycle
+  }
+}
+
+That would work, but at high frequencies we would have very poor control over the delay.
+I've put some imaginary number of cycles to execute each line of code. You can see that
+with a delay of zero, each sample is sent to the dac every 6 cycles. With a delay of 1, 
+each sample is sent every 7 cycles - a 16% change for the smallest delay increment.
+
+As you might have guessed, this isn't how a DDS is implemented. In fact the change is
+very simple. We use two values: the phaseAddress and the phaseIncrement. 
+
+We figure out which entry in the wave table to use by dividing the phaseAddress by 
+some number D.
+
+*** Explain this a lot better ***
+
+What is phase noise?
+
+  -- Diagram of quantized sine wave with some odd-number of slices --
+  
+  
+OK. Enough theory.
+
+The Implementation - Hardware
+-------------------------------
+
+First of all, the hardware. Here's the circuit diagram. The highlighted parts are
+my additions. As you can see, they consist of two diodes and a capacitor.
+
+The diodes form a basic OR-gate, so that when any of the three buttons is pressed, the
+input pin PD2 is pulled low. This is used to generate an interrupt to force the generator
+to break out of the synthesis loops. Using interrupts in this way rather than have the 
+processor continually scan the buttons for presses means that the output signal is 
+constant as long as no buttons are pressed.
+
+The capacitor is connected to PINA1 which is configured either in tristate - in which 
+case the capacitor has no effect on the output signal, or as an output drive low - in
+which case the capacitor acts as a low-pass filter, smoothing out the transitions from
+one step to the next and giving a cleaner output signal.
+
+The Implementation - Software
+-------------------------------
+
+In order to make this hack as easy as possible, the code is written as an Arduino sketch
+and you can use an Arduino as a programmer to load the code into the AtTiny2313. I could
+have got more features into the code, and a higher maximum generated frequency, if I'd
+written the software completely in assembler. However the Atmel IDE only runs on Windows
+and my PCs only run Linux, so I chose to go the Arduino route. If I did this from scratch
+I'd use a DsPIC (70MHz! IDE runs on Linux! In-circuit debugging!)
+
+The complete code is attached. It is divided into three parts:
+
+  - initialization
+  - key scanning and control (the user interface)
+  - wave generation
+  
+Initialization
+---------------
+This is simple. It turns off the interrupts from the timer (disabling the Arduino millis()
+function), and set the pins to inputs and outputs as necessary.
+
+The interesting one is the use of PA0. I need a way to get my interrupt routine to tell
+the synthesis loops to stop running. So when the processor gets an interrupt from one of
+the buttons, it sets PA0 to '1'. Every cycle round the synthesis loop this bit is tested
+and if it is set, the loop exits. This is marginally faster than setting a global variable
+and checking that in the loop since it doesn't involve a memory read.
+
+Key Scanning and Control
+-------------------------
+An interrupt causes the synthesis loop to stop, and the arduino loop() function starts
+to run as normal. Every time the loop runs the global ticks variable is incremented by 1,
+and this is used as a timer for button debouncing and measuring how long a button is
+pressed.
+
+Button operation is as follows:
+
+F+ : a short press increments the generated frequency by a set amount. This amount
+     varies as follows. 
+     Below 100Hz increments by 1Hz per click
+     Above 100Hz increments by 10Hz per click
+     Above 1KHz  increments by 100Hz per click
+     Above 10KHz increments by 1KHz per click
+     
+   : a press of longer than 1 second causes the frequency to increment continuously
+     by the equivalent of 5 short clicks per second.
+     The LEDs indicate this by all being blanked, except the SQ LED which flashes
+     
+   : a press of longer than 3 seconds causes the frequency to increment continuously
+     by the equivalent of 20 short clicks per second.
+     The SINE LED flashes.
+     Once the maximum frequency is reached, the SINE LED remains lit without flashing.
+     
+F- : works analogously to F+, but decreasing frequency.
+
+Function : A short press cycles through the signal waveforms.
+         : A long press enables mode setting in this mode the function LEDs flash 
+           to indicate
+           SINE - When lit, the output filtering capacitor is enabled
+                  Toggled by pressing F+
+           SQUARE - lit to indicate the output filtering is disabled
+                  
+           TRIANGLE - When lit, under-sampling is enabled for frequencies above xxKHz
+                    Toggled by pressing F-
+           SAWTOOTH - Lit to indicate that under-sampling is diabled
+                    
+          : Once the relevant modes have been enabled, a second press of the Function 
+            button will return the other buttons to their normal operation. 
+            
+Installing the Hardware Mods
+-----------------------------
+
+This is pretty simple really. First, remove the AtTiny from its socket and plug it
+in to your Arduino breadboard. You could use an earthing strap if you are paranoid.
+
+Now solder the two diodes and capacitor in place on the underside of the board as shown
+in the photo. Diodes should be small-signal diodes. E.g. 1N914 or 1N4148.
+Capacitor should be around 220pF.
+
+Once the AtTiny has been reprogrammed, remove it from the Arduino breadboard and plug it
+back into the generator socket and you're ready to go.
+
+Installing The Software Mods
+-----------------------------

@@ -1,0 +1,67 @@
+
+button pins -> interrupt
+
+main {
+	mode = sine
+	delta = 1000
+	phase = 000000
+
+	while(true) {
+		switch(mode) {
+			case sine: sine(); break;
+			case square: square(); break;
+			case saw: saw(); break;
+			case triangle: triangle(); break;
+		}
+	}
+}
+
+int handler {
+
+
+
+}
+
+
+data {
+ sin(0)
+ sin(1/256)
+ ...
+}
+
+
+
+sine {
+
+	phase = phase + delta
+	out portd,data[phase >> 16]
+
+	brtc sine
+}
+
+square {
+	phase = phase + delta
+	
+	if(phase > 80000) {
+		out portd,ff
+	} else {
+		out portd,00
+	}
+
+	brtc square
+}
+
+saw {
+}
+
+triangle {
+}
+
+handleFreqUp {
+}
+
+handleFreqDown {
+}
+
+handleMode {
+}

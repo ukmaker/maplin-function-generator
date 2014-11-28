@@ -1,0 +1,56 @@
+* EESchema Netlist Version 1.1 (Spice format) creation date: Thu 26 Jun 2014 14:01:40 BST
+
+* To exclude a component from the Spice Netlist add [Spice_Netlist_Enabled] user FIELD set to: N
+* To reorder the component spice node sequence add [Spice_Node_Sequence] user FIELD and define sequence: 2,1,0
+
+*Sheet Name:/
+C7  VAA GND 100n		
+D3  Net-_D2-Pad1_ Net-_D3-Pad2_ DIODE		
+D2  Net-_D2-Pad1_ Net-_D2-Pad2_ DIODE		
+R20  Net-_IC1-Pad7_ Net-_D4-Pad1_ 330R		
+R21  Net-_IC1-Pad8_ Net-_D5-Pad1_ 330R		
+R22  Net-_IC1-Pad9_ Net-_D6-Pad1_ 330R		
+R23  Net-_IC1-Pad11_ Net-_D7-Pad1_ 330R		
+D4  Net-_D4-Pad1_ GND LED		
+D5  Net-_D5-Pad1_ GND LED		
+D6  Net-_D6-Pad1_ GND LED		
+D7  Net-_D7-Pad1_ GND LED		
+S3  Net-_D2-Pad1_ Net-_D2-Pad1_ GND GND FUNC		
+S2  Net-_D2-Pad2_ Net-_D2-Pad2_ GND GND F-		
+S1  Net-_D3-Pad2_ Net-_D3-Pad2_ GND GND F+		
+C5  VCC GND 100n		
+D1  Net-_D1-Pad1_ VAA DIODE		
+J1  Net-_C3-Pad2_ Net-_C3-Pad2_ Net-_D1-Pad1_ POWER_JACKRCA		
+C3  VAA Net-_C3-Pad2_ 220u		
+C4  VCC Net-_C3-Pad2_ 100n		
+XU3  Net-_C3-Pad2_ VAA VCC 78L05		
+R18  VCC Net-_IC1-Pad1_ R		
+C9  PA1 Net-_C9-Pad2_ 470p		
+P1  Net-_C2-Pad2_ GND CONN_2		
+C6  GND VAA 100n		
+C2  Net-_C1-Pad1_ Net-_C2-Pad2_ 220u		
+R19  GND Net-_C1-Pad2_ R		
+C1  Net-_C1-Pad1_ Net-_C1-Pad2_ 100n		
+RV1  GND GND Net-_C8-Pad1_ POT		
+C8  Net-_C8-Pad1_ Net-_C8-Pad2_ 100n		
+R17  Net-_R17-Pad1_ Net-_C8-Pad1_ R		
+XU2  ? GND Net-_C8-Pad2_ GND Net-_C1-Pad1_ VAA ? LM386		
+R4  D3 Net-_R12-Pad2_ 20K		
+R12  Net-_R11-Pad2_ Net-_R12-Pad2_ 10K		
+R11  Net-_R10-Pad2_ Net-_R11-Pad2_ 10K		
+R3  D2 Net-_R11-Pad2_ 20K		
+R2  D1 Net-_R10-Pad2_ 20K		
+R10  Net-_R1-Pad2_ Net-_R10-Pad2_ 10K		
+R9  Net-_R1-Pad2_ GND 20K		
+R1  D0 Net-_R1-Pad2_ 20K		
+R5  D4 Net-_R13-Pad2_ 20K		
+R13  Net-_R12-Pad2_ Net-_R13-Pad2_ 10K		
+R14  Net-_R13-Pad2_ Net-_R14-Pad2_ 10K		
+R6  D5 Net-_R14-Pad2_ 20K		
+R7  D6 Net-_R15-Pad2_ 20K		
+R15  Net-_R14-Pad2_ Net-_R15-Pad2_ 10K		
+R16  Net-_R15-Pad2_ Net-_C9-Pad2_ 10K		
+R8  D7 Net-_C9-Pad2_ 20K		
+XIC1  Net-_IC1-Pad1_ Net-_D3-Pad2_ Net-_D2-Pad2_ PA1 ? Net-_D2-Pad1_ Net-_IC1-Pad7_ Net-_IC1-Pad8_ Net-_IC1-Pad9_ GND Net-_IC1-Pad11_ D0 D1 D2 D3 D4 D5 D6 D7 VCC ATTINY2313A-P		
+
+.end
